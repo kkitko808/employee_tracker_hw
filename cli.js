@@ -11,7 +11,7 @@ var connection = mysql.createConnection({
     user: "root",
 
     // Your password
-    password: "",
+    password: "root",
     database: "employee_tracker_db"
 });
 
@@ -64,7 +64,7 @@ function runSearch() {
                     break;
 
                 case "Update Employee Roles":
-                    updateEmployee();
+                    updateEmployeeRole();
                     break;
 
                 case "exit":
@@ -117,7 +117,15 @@ function addEmployee() {
             roles.push(res[i].title);
         }
     })
-
+    // Selecting all managers
+    var managers = ["none"]
+    var query = "SELECT * from employee WHERE manager_id IS NOT NULL";
+    connection.query(query, function (err, res){
+        if (err) throw err;
+        for (var i = 0; i < res.length; i++) {
+            managers.push(res[i].first_name +" "+ res[i].last_name);
+        }
+    })
     inquirer
         .prompt([
             {
@@ -131,18 +139,23 @@ function addEmployee() {
             {
                 type: "list",
                 name: "role",
-                message: "What is their role?",
+                message: "What is the employee's role?",
                 choices: roles
+            },
+            {
+                type: "list",
+                name: "manager",
+                message: "Who is the employee's manager?",
+                choices: managers
             }
         ]).then(res => {
-            // Open conenction to get id of role
-            connection.query("SELECT * FROM role WHERE ?",
+            // If manager ID is NULL
+            if(res.manager == "none"){
+                connection.query("SELECT * FROM role WHERE ?",
                 {
                     title: res.role
                 }, function (err, data) {
                     if (err) throw err;
-                    console.log(data[0].id)
-                    // console.log("the role id for " + res.role + " is :" + res[1].id)
                     connection.query(
                         "INSERT INTO employee SET ?",
                         {
@@ -154,9 +167,39 @@ function addEmployee() {
                             employeeSearch()
                         }
                     )
+                }   
+            )
+        }
+        // If manager ID is not null
+        else{
+            // For loop to get corresponding ID of manager
+            for (let i = 0; i < managers.length; i++) {
+                if (res.manager == managers[i]){
+                    var managerID = i++
+                }
+                
+            }
+            connection.query("SELECT * FROM role WHERE ?",
+                {
+                    title: res.role
+                }, function (err, data) {
+                    if (err) throw err;
+                    connection.query(
+                        "INSERT INTO employee SET ?",
+                        {
+                            first_name: res.first,
+                            last_name: res.last,
+                            role_id: data[0].id,
+                            manager_id: managerID
+                        }, function (err, res) {
+                            if (err) throw err;
+                            employeeSearch()
+                        }
+                    )
                 }
             )
-        })
+        }        
+    })
 }
 function addDepartment() {
     // Selecting every role and pushing it into a list
@@ -205,4 +248,42 @@ function addRole() {
                 }
             )
         })
+}
+function updateEmployeeRole(){
+    // Get a list of every employee
+    var employees = []
+    var query = "SELECT first_name, last_name FROM employee"
+    connection.query(query, function (err, res){
+        if(err) throw err;
+        for (var i = 0; i < res.length; i++) {
+            employees.push(res[i].first_name +" "+ res[i].last_name);
+        }
+    })
+    // Selecting every role and pushing it into a list
+    var roles = []
+    var query = "SELECT * from role";
+    connection.query(query, function (err, res) {
+        if (err) throw err;
+        for (var i = 0; i < res.length; i++) {
+            roles.push(res[i].title);
+        }
+    })
+    inquirer
+        .prompt([
+            {
+                type: "list",
+                name: "employee",
+                message: "Which employee would you like to update their role?",
+                choices: employees
+            },
+            {
+                type: "list",
+                name: "newRole",
+                message: "What is the employee's new role?",
+                choices: roles
+            }
+        ])
+
+// Ask which employee's role should be updated
+
 }
