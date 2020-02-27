@@ -31,9 +31,11 @@ function runSearch() {
                 "View all Departments",
                 "View all Roles",
                 "Add Employee",
+                "Remove Employee",
                 "Add Department",
                 "Add Role",
-                "Update Employee Roles",
+                "Update Employee Role",
+                "Update Employee Manager",
                 "EXIT"
             ]
         })
@@ -55,6 +57,10 @@ function runSearch() {
                     addEmployee();
                     break;
 
+                case "Remove Employee":
+                    removeEmployee();
+                    break;
+
                 case "Add Department":
                     addDepartment();
                     break;
@@ -63,8 +69,12 @@ function runSearch() {
                     addRole();
                     break;
 
-                case "Update Employee Roles":
+                case "Update Employee Role":
                     updateEmployeeRole();
+                    break;
+
+                case "Update Employee Manager":
+                    updateEmployeeManager();
                     break;
 
                 case "exit":
@@ -110,7 +120,7 @@ function roleSearch() {
 function addEmployee() {
     // Selecting every role and pushing it into a list
     var roles = []
-    var query = "SELECT * from role";
+    var query = "SELECT * FROM role";
     connection.query(query, function (err, res) {
         if (err) throw err;
         for (var i = 0; i < res.length; i++) {
@@ -119,7 +129,7 @@ function addEmployee() {
     })
     // Selecting all managers
     var managers = ["none"]
-    var query = "SELECT * from employee WHERE manager_id IS NOT NULL";
+    var query = "SELECT * FROM employee WHERE manager_id IS NOT NULL";
     connection.query(query, function (err, res){
         if (err) throw err;
         for (var i = 0; i < res.length; i++) {
@@ -162,9 +172,10 @@ function addEmployee() {
                             first_name: res.first,
                             last_name: res.last,
                             role_id: data[0].id
-                        }, function (err, res) {
+                        }, function (err, data) {
                             if (err) throw err;
-                            employeeSearch()
+                            console.log(res.first+" "+res.last+" has been added to the database.")
+                            runSearch();
                         }
                     )
                 }   
@@ -177,7 +188,6 @@ function addEmployee() {
                 if (res.manager == managers[i]){
                     var managerID = i++
                 }
-                
             }
             connection.query("SELECT * FROM role WHERE ?",
                 {
@@ -191,9 +201,10 @@ function addEmployee() {
                             last_name: res.last,
                             role_id: data[0].id,
                             manager_id: managerID
-                        }, function (err, res) {
+                        }, function (err, data) {
                             if (err) throw err;
-                            employeeSearch()
+                            console.log(res.first+" "+res.last+" has been added to the database.")
+                            runSearch();
                         }
                     )
                 }
@@ -201,9 +212,47 @@ function addEmployee() {
         }        
     })
 }
+function removeEmployee(){
+    var query = "SELECT first_name, last_name FROM employee";
+    connection.query(query, function (err, res){
+        if (err) throw err;
+        inquirer
+            .prompt([
+                {   
+                    name: 'employeeChosen',
+                    type: 'rawlist',
+                    choices: function() {
+                        var employeesArray = [];
+                            for (var i = 0; i < res.length; i++) {
+                                employeesArray.push(res[i].first_name +" "+ res[i].last_name);
+                            }
+                            return employeesArray;
+                        },
+                    message: 'Which employee do you want to remove?',
+                },
+            ]).then(function(res){
+                // Takes selected employee and separates their first and last name into an array
+                var fullNameArry = res.employeeChosen.split(" ");
+                connection.query(
+                    "DELETE FROM employee WHERE ? AND ?",
+                    [
+                        {
+                            first_name: fullNameArry[0]
+                        },
+                        {
+                            last_name: fullNameArry[1]
+                        }
+                    ],
+                    function(err, data){
+                        if (err) throw err;
+                        console.log(res.employeeChosen+" has been deleted from the database.")
+                        runSearch()
+                    }
+                )
+            })
+    })
+}
 function addDepartment() {
-    // Selecting every role and pushing it into a list
-
     inquirer
         .prompt([
             {
@@ -220,12 +269,11 @@ function addDepartment() {
                     departmentSearch()
                 }
             )
+            runSearch()
         })
 }
 
 function addRole() {
-    // Selecting every role and pushing it into a list
-
     inquirer
         .prompt([
             {
@@ -244,46 +292,144 @@ function addRole() {
                     salary: res.salary
                 }, function (err, res) {
                     if (err) throw err;
-                    roleSearch()
                 }
             )
+            runSearch()
         })
 }
-function updateEmployeeRole(){
-    // Get a list of every employee
-    var employees = []
-    var query = "SELECT first_name, last_name FROM employee"
-    connection.query(query, function (err, res){
-        if(err) throw err;
-        for (var i = 0; i < res.length; i++) {
-            employees.push(res[i].first_name +" "+ res[i].last_name);
-        }
-    })
+function updateEmployeeRole(){    
     // Selecting every role and pushing it into a list
     var roles = []
-    var query = "SELECT * from role";
+    var query = "SELECT * FROM role";
     connection.query(query, function (err, res) {
         if (err) throw err;
-        for (var i = 0; i < res.length; i++) {
+        for (let i = 0; i < res.length; i++) {
             roles.push(res[i].title);
         }
     })
-    inquirer
+    var query = "SELECT first_name, last_name FROM employee";
+    connection.query(query, function (err, res){
+        inquirer
         .prompt([
             {
-                type: "list",
-                name: "employee",
-                message: "Which employee would you like to update their role?",
-                choices: employees
+                name: "employeeChosen",
+                type: "rawlist",
+                choices: function(){
+                    var employeesArray = []
+                    if (err) throw err;
+                    for (var i = 0; i < res.length; i++) {
+                        employeesArray.push(res[i].first_name +" "+ res[i].last_name);
+                    }
+                    return employeesArray;
+                },
+                message: "Which employee would you like to update their role?"
             },
             {
                 type: "list",
-                name: "newRole",
+                name: "role",
                 message: "What is the employee's new role?",
                 choices: roles
             }
-        ])
+        ]).then(res =>{
+            // Loop that gets corresponding ID of selected role
+            for (let i = 0; i < roles.length; i++) {
+                if (res.role == roles[i]){
+                    var roleID = i + 1;
+                }
+            }
+            // Takes selected employee and separates their first and last name into an array
+            var fullNameArry = res.employeeChosen.split(" ");
 
-// Ask which employee's role should be updated
-
+            // Updating Employee's role
+            connection.query("UPDATE employee SET ? WHERE ? AND ?",
+            [
+                {
+                    role_id : roleID
+                },
+                {
+                    first_name: fullNameArry[0]
+                },
+                {
+                    last_name: fullNameArry[1]
+                }
+            ],
+            function(err, data){
+                if (err) throw err;
+                console.log(res.employeeChosen+ "'s role has been updated to role id: "+ roleID, res.role)
+                runSearch()
+            }
+            )
+        })
+    })
+}
+function updateEmployeeManager(){
+    var query = "SELECT first_name, last_name FROM employee";
+    connection.query(query, function (err, res){
+        if (err) throw err;
+    inquirer
+        .prompt([
+            {
+                name: "employeeChosen",
+                type: "rawlist",
+                choices: function (){
+                    var employeesArray = []
+                    if (err) throw err;
+                    for (var i = 0; i < res.length; i++) {
+                        employeesArray.push(res[i].first_name +" "+ res[i].last_name);
+                    }
+                    return employeesArray;
+                },
+                message: "which employee's manager would you like to update?"
+            },
+            {
+                name: "managerChosen",
+                type: "rawlist",
+                choices: function (){
+                    var employeesArray = []
+                    if (err) throw err;
+                    for (var i = 0; i < res.length; i++) {
+                        employeesArray.push(res[i].first_name +" "+ res[i].last_name);
+                    }
+                    return employeesArray;
+                },
+                message: "which employee do you want to set as manager for the selected employee?",
+            }
+        ]).then(res =>{
+             // Takes selected employee and separates their first and last name into an array
+            var employeeNameArry = res.employeeChosen.split(" ");
+            // Takes selected manager and separates their first and last name into an array
+            var managerNameArry = res.managerChosen.split(" ");
+            // Get id of manager
+            connection.query("SELECT id from employee WHERE ? AND ?",
+            [
+                {
+                    first_name: managerNameArry[0]
+                },
+                {
+                    last_name: managerNameArry[1]
+                }
+            ],
+            function(err, data){
+                if (err) throw err;
+                connection.query("UPDATE employee SET ? WHERE ? AND ?",
+                [
+                    {
+                        manager_id: data[0].id
+                    },
+                    {
+                        first_name: employeeNameArry[0]
+                    },
+                    {
+                        last_name: employeeNameArry[1]
+                    }
+                ],
+                function(err, results){
+                    if (err) throw err;
+                    console.log("Successfully updated " + res.employeeChosen + "'s manager to " + res.managerChosen)
+                    runSearch()
+                })
+            })
+            
+        })
+    })
 }
